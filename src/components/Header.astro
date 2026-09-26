@@ -1,0 +1,22 @@
+---
+interface Props {
+  active?: "timetable" | "about";
+}
+const { active } = Astro.props;
+---
+
+<header class="site-header">
+  <div class="site-header-inner">
+    <a href="/" class="brand">
+      <span class="material-symbols-outlined brand-icon" aria-hidden="true">calendar_month</span>
+      <span class="brand-text">
+        <span class="brand-title">Timetable</span>
+        <span class="brand-subtitle">Clash checker</span>
+      </span>
+    </a>
+    <nav aria-label="site">
+      <a href="/" class={active === "timetable" ? "active" : undefined}>My timetable</a>
+      <a href="/readme/" class={active === "about" ? "active" : undefined}>About</a>
+    </nav>
+  </div>
+</header>

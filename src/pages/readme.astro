@@ -2,6 +2,7 @@
 // README.md, rendered: what this app is and what good looks like here,
 // published with the app. spec/readme.test.ts checks the whole of it is here.
 import * as readme from "../../README.md";
+import Header from "../components/Header.astro";
 import "../styles.css";
 
 const title = readme.getHeadings().find((h) => h.depth === 1)?.text ?? "README";
@@ -17,12 +18,23 @@ const html = (await readme.compiledContent()).replace(/(src|href)="public\//g, '
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
+      rel="stylesheet"
+    />
   </head>
   <body>
-    <nav aria-label="site">
-      <a href="/">Guestbook</a>
-      <a href="/readme/">About</a>
-    </nav>
+    <Header active="about" />
     <main set:html={html} />
+    <footer class="site-footer">
+      <div class="site-footer-inner">
+        <div>
+          <strong>ANU Timetable Clash Checker</strong>
+          <span>A COMP4020 prototype — not an official university system.</span>
+        </div>
+        <span>Built with Astro + SQLite.</span>
+      </div>
+    </footer>
   </body>
 </html>

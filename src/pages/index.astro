@@ -1,5 +1,6 @@
 ---
 import { listOfferings, listSelections } from "../lib/db";
+import Header from "../components/Header.astro";
 import "../styles.css";
 
 const offerings = listOfferings();
@@ -65,6 +66,40 @@ const slotLabels = Array.from({ length: GRID_ROWS }, (_, i) => {
   const m = String(minutes % 60).padStart(2, "0");
   return `${h}:${m}`;
 });
+
+const SESSION_ICONS: Record<string, string> = {
+  Lecture: "menu_book",
+  Lab: "science",
+  Studio: "palette",
+  Tutorial: "groups",
+};
+function sessionIcon(sessionType: string): string {
+  return SESSION_ICONS[sessionType] ?? "event";
+}
+
+// Real numbers off the actual selections, not decoration — distinct
+// courses, session count, and total contact hours via the same
+// timeToMinutes used to lay out the grid. "Clash-free" is stated rather
+// than counted: the app never lets a clash reach the timetable, so there's
+// nothing to tally.
+const distinctCourseCount = new Set(timetable.map((entry) => entry.offering.courseCode)).size;
+const totalContactMinutes = timetable.reduce(
+  (sum, entry) =>
+    sum + (timeToMinutes(entry.offering.endTime) - timeToMinutes(entry.offering.startTime)),
+  0,
+);
+const totalContactHours = Math.round((totalContactMinutes / 60) * 10) / 10;
+
+// Same data as the grid, grouped by day for the agenda list beside it — a
+// second, list-shaped view of exactly what's already on the timetable
+// (nothing fabricated), which also happens to fill the width a five-day
+// grid leaves spare once there's only a handful of sessions on it.
+const timetableByDay = new Map<string, typeof timetable>();
+for (const entry of timetable) {
+  const list = timetableByDay.get(entry.offering.day) ?? [];
+  list.push(entry);
+  timetableByDay.set(entry.offering.day, list);
+}
 ---
 
 <!doctype html>
@@ -73,12 +108,14 @@ const slotLabels = Array.from({ length: GRID_ROWS }, (_, i) => {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Timetable</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
+      rel="stylesheet"
+    />
   </head>
   <body>
-    <nav aria-label="site">
-      <a href="/" class="brand">Timetable</a>
-      <a href="/readme/">About</a>
-    </nav>
+    <Header active="timetable" />
     <main>
       <h1>My timetable</h1>
       <p class="lede">
@@ -90,55 +127,136 @@ const slotLabels = Array.from({ length: GRID_ROWS }, (_, i) => {
       {
         addedOffering && (
           <p role="status" class="toast toast-success">
-            Added: {addedOffering.courseCode} {addedOffering.sessionType} (
-            {addedOffering.day} {addedOffering.startTime}–{addedOffering.endTime}).
+            <span class="toast-icon material-symbols-outlined" aria-hidden="true">
+              check_circle
+            </span>
+            <span class="toast-body">
+              <strong>
+                Added: {addedOffering.courseCode} {addedOffering.sessionType}
+              </strong>
+              <span>
+                {addedOffering.day} {addedOffering.startTime}–{addedOffering.endTime}
+              </span>
+            </span>
           </p>
         )
       }
       {
         removedOffering && (
           <p role="status" class="toast toast-success">
-            Removed: {removedOffering.courseCode} {removedOffering.sessionType} (
-            {removedOffering.day} {removedOffering.startTime}–{removedOffering.endTime}).
+            <span class="toast-icon material-symbols-outlined" aria-hidden="true">
+              check_circle
+            </span>
+            <span class="toast-body">
+              <strong>
+                Removed: {removedOffering.courseCode} {removedOffering.sessionType}
+              </strong>
+              <span>
+                {removedOffering.day} {removedOffering.startTime}–{removedOffering.endTime}
+              </span>
+            </span>
           </p>
         )
       }
       {
         clashOffering && (
           <p role="alert" class="toast toast-error">
-            {clashOffering.courseCode} {clashOffering.sessionType} (
-            {clashOffering.day} {clashOffering.startTime}–{clashOffering.endTime})
-            was not added — it clashes with{" "}
-            {withOffering
-              ? `${withOffering.courseCode} ${withOffering.sessionType} (${withOffering.day} ${withOffering.startTime}–${withOffering.endTime})`
-              : "a session already on your timetable"}
-            .
+            <span class="toast-icon material-symbols-outlined" aria-hidden="true">
+              error
+            </span>
+            <span class="toast-body">
+              <strong>
+                {clashOffering.courseCode} {clashOffering.sessionType} was not added
+              </strong>
+              <span>
+                ({clashOffering.day} {clashOffering.startTime}–{clashOffering.endTime}) clashes
+                with{" "}
+                {withOffering
+                  ? `${withOffering.courseCode} ${withOffering.sessionType} (${withOffering.day} ${withOffering.startTime}–${withOffering.endTime})`
+                  : "a session already on your timetable"}
+                .
+              </span>
+            </span>
           </p>
         )
       }
       {
         cleared && (
           <p role="status" class="toast toast-success">
-            Timetable cleared.
+            <span class="toast-icon material-symbols-outlined" aria-hidden="true">
+              check_circle
+            </span>
+            <span class="toast-body">
+              <strong>Timetable cleared.</strong>
+            </span>
           </p>
         )
       }
       {
         autoselected && conflictCourseCodes.length === 0 && (
           <p role="status" class="toast toast-success">
-            One-click enrol: added every course's Lecture and a non-clashing Lab.
+            <span class="toast-icon material-symbols-outlined" aria-hidden="true">
+              check_circle
+            </span>
+            <span class="toast-body">
+              <strong>One-click enrol complete</strong>
+              <span>Added every course's Lecture and a non-clashing Lab.</span>
+            </span>
           </p>
         )
       }
       {
         autoselected && conflictCourseCodes.length > 0 && (
           <p role="alert" class="toast toast-error">
-            Couldn't fit a Lab for {conflictCourseCodes.join(", ")} — every Lab
-            option left clashes with another course's. Try swapping one of
-            these for a different course.
+            <span class="toast-icon material-symbols-outlined" aria-hidden="true">
+              error
+            </span>
+            <span class="toast-body">
+              <strong>Couldn't fit a Lab for {conflictCourseCodes.join(", ")}</strong>
+              <span>
+                Every Lab option left clashes with another course's. Try swapping one of these
+                for a different course.
+              </span>
+            </span>
           </p>
         )
       }
+
+      <div class="stats-bar">
+        <div class="stat-card">
+          <span class="stat-card-label">
+            <span>Courses</span>
+            <span class="material-symbols-outlined" aria-hidden="true">school</span>
+          </span>
+          <span class="stat-card-value">{distinctCourseCount}</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-card-label">
+            <span>Sessions</span>
+            <span class="material-symbols-outlined" aria-hidden="true">event</span>
+          </span>
+          <span class="stat-card-value">{timetable.length}</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-card-label">
+            <span>Contact hours</span>
+            <span class="material-symbols-outlined" aria-hidden="true">schedule</span>
+          </span>
+          <span class="stat-card-value">
+            {totalContactHours}
+            <small>hrs / week</small>
+          </span>
+        </div>
+        <div class="stat-card stat-status">
+          <span class="stat-card-label">
+            <span>Status</span>
+          </span>
+          <span class="stat-card-value">
+            <span class="material-symbols-outlined" aria-hidden="true">verified</span>
+            Clash-free
+          </span>
+        </div>
+      </div>
 
       <div class="layout">
         <aside class="sidebar" aria-labelledby="offerings-heading">
@@ -150,13 +268,28 @@ const slotLabels = Array.from({ length: GRID_ROWS }, (_, i) => {
                 <ul class="course-sessions">
                   {sessions.map((offering) => (
                     <li class={`type-${offering.sessionType.toLowerCase()}`}>
-                      <strong class="session-type">{offering.sessionType}</strong>
+                      <strong class="session-type">
+                        <span class="material-symbols-outlined" aria-hidden="true">
+                          {sessionIcon(offering.sessionType)}
+                        </span>
+                        {offering.sessionType}
+                      </strong>
                       <span>
                         {offering.day} {offering.startTime}–{offering.endTime}
                       </span>
-                      <span class="session-location">{offering.location}</span>
+                      <span class="session-location">
+                        <span class="material-symbols-outlined" aria-hidden="true">
+                          location_on
+                        </span>
+                        {offering.location}
+                      </span>
                       {takenOfferingIds.has(offering.id) ? (
-                        <span class="added-tag">Added</span>
+                        <span class="added-tag">
+                          <span class="material-symbols-outlined" aria-hidden="true">
+                            check
+                          </span>
+                          Added
+                        </span>
                       ) : (
                         <form method="post" action="/api/timetable">
                           <input type="hidden" name="offeringId" value={offering.id} />
@@ -183,12 +316,32 @@ const slotLabels = Array.from({ length: GRID_ROWS }, (_, i) => {
               </form>
             </div>
           </div>
-          {timetable.length === 0 && <p>Nothing added yet.</p>}
+          {
+            timetable.length === 0 && (
+              <div class="empty-state">
+                <span class="material-symbols-outlined" aria-hidden="true">
+                  event_available
+                </span>
+                <p>
+                  Nothing added yet. Pick a session from the list on the left, or use{" "}
+                  <strong>One-click enrol</strong> above to fill your whole timetable in one go.
+                </p>
+              </div>
+            )
+          }
           <div
             id="timetable"
             style={`grid-template-columns: auto repeat(${GRID_DAYS.length}, 1fr); grid-template-rows: auto repeat(${GRID_ROWS}, 2rem);`}
           >
             <div class="grid-corner" style="grid-column: 1; grid-row: 1;" />
+            {Array.from({ length: Math.ceil(GRID_ROWS / 2) }, (_, hourIndex) => hourIndex)
+              .filter((hourIndex) => hourIndex % 2 === 0)
+              .map((hourIndex) => (
+                <div
+                  class="grid-hour-band"
+                  style={`grid-column: 1 / -1; grid-row: ${hourIndex * 2 + 2} / ${hourIndex * 2 + 4};`}
+                />
+              ))}
             {GRID_DAYS.map((day, i) => (
               <div class="grid-day-header" style={`grid-column: ${i + 2}; grid-row: 1;`}>
                 {day}
@@ -213,9 +366,12 @@ const slotLabels = Array.from({ length: GRID_ROWS }, (_, i) => {
                     type="submit"
                     aria-label={`Remove ${entry.offering.courseCode} ${entry.offering.sessionType}`}
                   >
-                    ×
+                    <span class="material-symbols-outlined" aria-hidden="true">close</span>
                   </button>
                 </form>
+                <span class="material-symbols-outlined slot-type-icon" aria-hidden="true">
+                  {sessionIcon(entry.offering.sessionType)}
+                </span>
                 <strong>
                   {entry.offering.courseCode} {entry.offering.sessionType}
                 </strong>
@@ -227,8 +383,50 @@ const slotLabels = Array.from({ length: GRID_ROWS }, (_, i) => {
             ))}
           </div>
         </section>
+
+        <aside class="agenda" aria-labelledby="agenda-heading">
+          <h3 id="agenda-heading">Agenda</h3>
+          {
+            timetable.length === 0 ? (
+              <p class="agenda-empty">Your sessions will be listed here once added.</p>
+            ) : (
+              GRID_DAYS.filter((day) => timetableByDay.has(day)).map((day) => (
+                <div class="agenda-day">
+                  <h4>{day}</h4>
+                  <ul>
+                    {timetableByDay.get(day)!.map((entry) => (
+                      <li class={`agenda-item type-${entry.offering.sessionType.toLowerCase()}`}>
+                        <span class="material-symbols-outlined" aria-hidden="true">
+                          {sessionIcon(entry.offering.sessionType)}
+                        </span>
+                        <span class="agenda-item-body">
+                          <strong>
+                            {entry.offering.courseCode} {entry.offering.sessionType}
+                          </strong>
+                          <span>
+                            {entry.offering.startTime}–{entry.offering.endTime} ·{" "}
+                            {entry.offering.location}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))
+            )
+          }
+        </aside>
       </div>
     </main>
+    <footer class="site-footer">
+      <div class="site-footer-inner">
+        <div>
+          <strong>ANU Timetable Clash Checker</strong>
+          <span>A COMP4020 prototype — not an official university system.</span>
+        </div>
+        <span>Built with Astro + SQLite.</span>
+      </div>
+    </footer>
     <script>
       // Live half of the app: a second open tab picks up an addition made in
       // the first over SSE. The form itself needs none of this — its

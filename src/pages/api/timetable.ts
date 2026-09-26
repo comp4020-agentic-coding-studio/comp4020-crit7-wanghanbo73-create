@@ -20,6 +20,7 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     return redirect("/", 303);
   }
 
+  if (result.replaced) bus.emit("selection", result.replaced);
   bus.emit("selection", result.entry);
   return redirect(`/?added=${offeringId}`, 303);
 };

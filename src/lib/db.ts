@@ -99,7 +99,11 @@ function overlaps(aStart: string, aEnd: string, bStart: string, bEnd: string): b
 // of them overlapping isn't a real-world conflict, so they never clash, even
 // against each other. Returns the existing offering a candidate Lab would
 // clash with, or null if it's clear or the candidate isn't a Lab at all.
-export function findClash(candidate: Offering): Offering | null {
+// `ignoreOfferingId` skips one existing selection from clash consideration —
+// used by addSelection when a course's existing Lab is about to be replaced
+// by another Lab option for the same course, so the outgoing one shouldn't
+// count as a clash against the incoming one.
+export function findClash(candidate: Offering, ignoreOfferingId?: number): Offering | null {
   if (candidate.sessionType !== "Lab") return null;
 
   const existing = listSelections();
@@ -107,6 +111,7 @@ export function findClash(candidate: Offering): Offering | null {
     if (entry.offering.sessionType !== "Lab") continue;
     if (entry.offering.day !== candidate.day) continue;
     if (entry.offering.id === candidate.id) continue;
+    if (entry.offering.id === ignoreOfferingId) continue;
     if (overlaps(candidate.startTime, candidate.endTime, entry.offering.startTime, entry.offering.endTime)) {
       return entry.offering;
     }
@@ -115,19 +120,41 @@ export function findClash(candidate: Offering): Offering | null {
 }
 
 export type AddSelectionResult =
-  | { ok: true; entry: TimetableEntry }
+  | { ok: true; entry: TimetableEntry; replaced: TimetableEntry | null }
   | { ok: false; reason: "not-found" }
   | { ok: false; reason: "clash"; clash: Offering };
 
+// A course only ever needs (at most) one Lab, so picking a different Lab
+// option for a course that already has one swaps it out rather than sitting
+// alongside it — without this, two Lab options for the same course that
+// don't happen to overlap in time (a common case, since they're usually on
+// different days) would both silently end up on the timetable at once.
 export function addSelection(offeringId: number): AddSelectionResult {
   const offering = db.select().from(offerings).where(eq(offerings.id, offeringId)).get();
   if (!offering) return { ok: false, reason: "not-found" };
 
-  const clash = findClash(offering);
+  const existingLabForCourse =
+    offering.sessionType === "Lab"
+      ? (listSelections().find(
+          (entry) =>
+            entry.offering.sessionType === "Lab" &&
+            entry.offering.courseCode === offering.courseCode,
+        ) ?? null)
+      : null;
+
+  const clash = findClash(offering, existingLabForCourse?.offering.id);
   if (clash) return { ok: false, reason: "clash", clash };
 
+  if (existingLabForCourse) {
+    db.delete(selections).where(eq(selections.id, existingLabForCourse.selectionId)).run();
+  }
+
   const selection = db.insert(selections).values({ offeringId }).returning().get();
-  return { ok: true, entry: { selectionId: selection.id, offering } };
+  return {
+    ok: true,
+    entry: { selectionId: selection.id, offering },
+    replaced: existingLabForCourse,
+  };
 }
 
 export function removeSelection(selectionId: number): TimetableEntry | null {

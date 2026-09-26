@@ -135,6 +135,32 @@ describe("timetable", () => {
     expect(timetableSection).not.toContain("COMP3600");
   });
 
+  it("replaces a course's existing Lab when a different Lab option for the same course is added", async () => {
+    // offering 2 (COMP4020 Lab, Mon 14:00-15:30) is still on the timetable
+    // from the earlier clash test above and hasn't been removed since.
+    const before = await (await fetch(baseUrl)).text();
+    const beforeSection = before.match(/<div id="timetable"[\s\S]*?<\/section>/)?.[0] ?? "";
+    expect(beforeSection).toContain("14:00");
+    const labSlotsBefore = (beforeSection.match(/<div class="slot type-lab"/g) ?? []).length;
+
+    // offering 3: COMP4020 Lab, Wed 09:00-10:30 — a different time option for
+    // the same course, doesn't overlap offering 2 at all, so the old
+    // same-course same-day clash rule would have let both sit on the
+    // timetable together. A course only needs one Lab, so this should swap
+    // offering 2 out instead of adding a second Lab slot.
+    const res = await post(3);
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toBe("/?added=3");
+
+    const after = await (await fetch(baseUrl)).text();
+    const afterSection = after.match(/<div id="timetable"[\s\S]*?<\/section>/)?.[0] ?? "";
+    const labSlotsAfter = (afterSection.match(/<div class="slot type-lab"/g) ?? []).length;
+    expect(labSlotsAfter).toBe(labSlotsBefore);
+    expect(afterSection).toContain("COMP4020 Lab");
+    expect(afterSection).toContain("09:00–10:30");
+    expect(afterSection).not.toContain("14:00–15:30");
+  });
+
   it("one-click enrol fills every course's Lecture and a non-clashing Lab, and clear empties the timetable", async () => {
     // The seed catalogue's Lab clashes (2×5, 3×8) are resolvable by picking
     // each course's Lab options in a different order, so a correct greedy
