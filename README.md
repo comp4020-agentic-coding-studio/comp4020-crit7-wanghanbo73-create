@@ -10,14 +10,19 @@ timetable, it's rejected on the spot instead of silently double-booking you.
 
 Good means: adding a session persists (SQLite, survives a reload), and the
 overlap check is the one rule the app can't be trusted without — same day,
-overlapping time range, rejected, with the page explaining what it clashed
-with. That rule is enforced by `spec/timetable.test.ts`; the generic
-navigation/accessibility floor is enforced by `spec/invariants.test.ts`.
+overlapping time range, rejected, with a floating notice explaining what it
+clashed with (a successful add gets the same treatment, so the page always
+confirms what just happened). "My timetable" renders as an actual weekly
+grid — days across, half-hour slots down — with each added session placed
+at its real time, rather than a plain list. A session can be taken back off
+the timetable too, freeing its slot up for re-adding. That rule is enforced
+by `spec/timetable.test.ts`; the generic navigation/accessibility floor is
+enforced by `spec/invariants.test.ts`.
 
-Deliberately out of scope this week: no login (one shared timetable), no
-removing a session once added, and no admin UI for the offerings catalogue —
-it's fixed seed data standing in for the real timetable feed. These are
-judgement calls about where a week's worth of effort goes, not oversights.
+Deliberately out of scope this week: no login (one shared timetable), and
+no admin UI for the offerings catalogue — it's fixed seed data standing in
+for the real timetable feed. These are judgement calls about where a week's
+worth of effort goes, not oversights.
 
 Images go in `public/` and are linked relatively — `![alt](public/before.png)`
 — which renders on GitHub and at `/readme/` alike.

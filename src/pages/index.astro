@@ -7,17 +7,64 @@ const timetable = listSelections();
 
 const takenOfferingIds = new Set(timetable.map((entry) => entry.offering.id));
 
+// Grouped by course so the sidebar can collapse to one row per course
+// (native <details>/<summary>, no client JS) — offerings are already
+// sorted by day/time, and grouping preserves that order within each course.
+const offeringsByCourse = new Map<string, typeof offerings>();
+for (const offering of offerings) {
+  const list = offeringsByCourse.get(offering.courseCode) ?? [];
+  list.push(offering);
+  offeringsByCourse.set(offering.courseCode, list);
+}
+
+const addedId = Number(Astro.url.searchParams.get("added"));
 const clashId = Number(Astro.url.searchParams.get("clash"));
 const withId = Number(Astro.url.searchParams.get("with"));
+const removedId = Number(Astro.url.searchParams.get("removed"));
+const addedOffering = offerings.find((o) => o.id === addedId);
 const clashOffering = offerings.find((o) => o.id === clashId);
 const withOffering = offerings.find((o) => o.id === withId);
+const removedOffering = offerings.find((o) => o.id === removedId);
 
-const byDay = new Map<string, typeof timetable>();
-for (const entry of timetable) {
-  const list = byDay.get(entry.offering.day) ?? [];
-  list.push(entry);
-  byDay.set(entry.offering.day, list);
+const autoselected = Astro.url.searchParams.get("autoselected") === "1";
+const cleared = Astro.url.searchParams.get("cleared") === "1";
+const conflictCourseCodes = (Astro.url.searchParams.get("conflicts") ?? "")
+  .split(",")
+  .filter(Boolean);
+
+// Every add/remove is a full page reload (progressive enhancement, no
+// client JS needed), which would otherwise reset every <details> back to
+// closed. Re-open whichever course group the action just touched, so
+// picking a second lab option for the same course doesn't require
+// re-expanding it each time.
+const openCourseCode =
+  addedOffering?.courseCode ?? clashOffering?.courseCode ?? removedOffering?.courseCode;
+
+// The grid: days across, half-hour rows down. The window (09:00-18:00)
+// covers the seed catalogue with headroom; a real feed would derive this
+// from its own data instead of a fixed constant.
+const GRID_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+const GRID_START_MINUTES = 9 * 60;
+const GRID_SLOT_MINUTES = 30;
+const GRID_ROWS = 18;
+
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
 }
+
+// Grid line numbers are 1-based and the header row occupies line 1, so a
+// session starting at the grid's first slot lands on row 2.
+function timeToRow(time: string): number {
+  return (timeToMinutes(time) - GRID_START_MINUTES) / GRID_SLOT_MINUTES + 2;
+}
+
+const slotLabels = Array.from({ length: GRID_ROWS }, (_, i) => {
+  const minutes = GRID_START_MINUTES + i * GRID_SLOT_MINUTES;
+  const h = String(Math.floor(minutes / 60)).padStart(2, "0");
+  const m = String(minutes % 60).padStart(2, "0");
+  return `${h}:${m}`;
+});
 ---
 
 <!doctype html>
@@ -29,20 +76,36 @@ for (const entry of timetable) {
   </head>
   <body>
     <nav aria-label="site">
-      <a href="/">Timetable</a>
+      <a href="/" class="brand">Timetable</a>
       <a href="/readme/">About</a>
     </nav>
     <main>
       <h1>My timetable</h1>
-      <p>
+      <p class="lede">
         Pick sessions from the offerings below. Adding one that overlaps a
         session already on your timetable is rejected on the spot, instead of
         letting you find out about the clash after enrolment.
       </p>
 
       {
+        addedOffering && (
+          <p role="status" class="toast toast-success">
+            Added: {addedOffering.courseCode} {addedOffering.sessionType} (
+            {addedOffering.day} {addedOffering.startTime}–{addedOffering.endTime}).
+          </p>
+        )
+      }
+      {
+        removedOffering && (
+          <p role="status" class="toast toast-success">
+            Removed: {removedOffering.courseCode} {removedOffering.sessionType} (
+            {removedOffering.day} {removedOffering.startTime}–{removedOffering.endTime}).
+          </p>
+        )
+      }
+      {
         clashOffering && (
-          <p role="alert">
+          <p role="alert" class="toast toast-error">
             {clashOffering.courseCode} {clashOffering.sessionType} (
             {clashOffering.day} {clashOffering.startTime}–{clashOffering.endTime})
             was not added — it clashes with{" "}
@@ -53,56 +116,153 @@ for (const entry of timetable) {
           </p>
         )
       }
+      {
+        cleared && (
+          <p role="status" class="toast toast-success">
+            Timetable cleared.
+          </p>
+        )
+      }
+      {
+        autoselected && conflictCourseCodes.length === 0 && (
+          <p role="status" class="toast toast-success">
+            One-click enrol: added every course's Lecture and a non-clashing Lab.
+          </p>
+        )
+      }
+      {
+        autoselected && conflictCourseCodes.length > 0 && (
+          <p role="alert" class="toast toast-error">
+            Couldn't fit a Lab for {conflictCourseCodes.join(", ")} — every Lab
+            option left clashes with another course's. Try swapping one of
+            these for a different course.
+          </p>
+        )
+      }
 
-      <section aria-labelledby="mine-heading">
-        <h2 id="mine-heading">On your timetable</h2>
-        {timetable.length === 0 && <p>Nothing added yet.</p>}
-        <ul id="timetable">
-          {[...byDay.entries()].map(([day, entries]) => (
-            <li>
-              <strong>{day}</strong>
-              <ul>
-                {entries.map((entry) => (
-                  <li data-selection-id={entry.selectionId}>
-                    {entry.offering.courseCode} {entry.offering.sessionType} ·{" "}
-                    {entry.offering.startTime}–{entry.offering.endTime} ·{" "}
-                    {entry.offering.location}
-                  </li>
-                ))}
-              </ul>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <div class="layout">
+        <aside class="sidebar" aria-labelledby="offerings-heading">
+          <h2 id="offerings-heading">Available sessions</h2>
+          <div id="offerings">
+            {[...offeringsByCourse.entries()].map(([courseCode, sessions]) => (
+              <details class="course-group" open={courseCode === openCourseCode || undefined}>
+                <summary>{courseCode}</summary>
+                <ul class="course-sessions">
+                  {sessions.map((offering) => (
+                    <li class={`type-${offering.sessionType.toLowerCase()}`}>
+                      <strong class="session-type">{offering.sessionType}</strong>
+                      <span>
+                        {offering.day} {offering.startTime}–{offering.endTime}
+                      </span>
+                      <span class="session-location">{offering.location}</span>
+                      {takenOfferingIds.has(offering.id) ? (
+                        <span class="added-tag">Added</span>
+                      ) : (
+                        <form method="post" action="/api/timetable">
+                          <input type="hidden" name="offeringId" value={offering.id} />
+                          <button>Add</button>
+                        </form>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ))}
+          </div>
+        </aside>
 
-      <section aria-labelledby="offerings-heading">
-        <h2 id="offerings-heading">Available sessions</h2>
-        <ul id="offerings">
-          {offerings.map((offering) => (
-            <li>
-              {offering.courseCode} {offering.sessionType} · {offering.day}{" "}
-              {offering.startTime}–{offering.endTime} · {offering.location}
-              {takenOfferingIds.has(offering.id) ? (
-                <span> (added)</span>
-              ) : (
-                <form method="post" action="/api/timetable">
-                  <input type="hidden" name="offeringId" value={offering.id} />
-                  <button>Add</button>
+        <section class="timetable-panel" aria-labelledby="mine-heading">
+          <div class="panel-header">
+            <h2 id="mine-heading">On your timetable</h2>
+            <div class="bulk-actions">
+              <form method="post" action="/api/timetable-autoselect">
+                <button type="submit">One-click enrol</button>
+              </form>
+              <form method="post" action="/api/timetable-clear">
+                <button type="submit" class="button-secondary">Clear timetable</button>
+              </form>
+            </div>
+          </div>
+          {timetable.length === 0 && <p>Nothing added yet.</p>}
+          <div
+            id="timetable"
+            style={`grid-template-columns: auto repeat(${GRID_DAYS.length}, 1fr); grid-template-rows: auto repeat(${GRID_ROWS}, 2rem);`}
+          >
+            <div class="grid-corner" style="grid-column: 1; grid-row: 1;" />
+            {GRID_DAYS.map((day, i) => (
+              <div class="grid-day-header" style={`grid-column: ${i + 2}; grid-row: 1;`}>
+                {day}
+              </div>
+            ))}
+            {slotLabels.map((label, i) => (
+              <div class="grid-time-label" style={`grid-column: 1; grid-row: ${i + 2};`}>
+                {label}
+              </div>
+            ))}
+            {timetable.map((entry) => (
+              <div
+                class={`slot type-${entry.offering.sessionType.toLowerCase()}`}
+                data-selection-id={entry.selectionId}
+                style={`grid-column: ${GRID_DAYS.indexOf(entry.offering.day) + 2}; grid-row: ${timeToRow(
+                  entry.offering.startTime,
+                )} / ${timeToRow(entry.offering.endTime)};`}
+              >
+                <form method="post" action="/api/timetable-remove" class="remove-form">
+                  <input type="hidden" name="selectionId" value={entry.selectionId} />
+                  <button
+                    type="submit"
+                    aria-label={`Remove ${entry.offering.courseCode} ${entry.offering.sessionType}`}
+                  >
+                    ×
+                  </button>
                 </form>
-              )}
-            </li>
-          ))}
-        </ul>
-      </section>
+                <strong>
+                  {entry.offering.courseCode} {entry.offering.sessionType}
+                </strong>
+                <span>
+                  {entry.offering.startTime}–{entry.offering.endTime}
+                </span>
+                <span>{entry.offering.location}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
     </main>
     <script>
       // Live half of the app: a second open tab picks up an addition made in
       // the first over SSE. The form itself needs none of this — its
       // POST + redirect re-renders the submitting tab from SQLite.
+      //
+      // Submitting the Add/Remove form is a full navigation away from THIS
+      // page, and the server broadcasts the SSE event for that very action
+      // before the browser finishes tearing this page down. If this
+      // soon-to-be-replaced page were still listening, it could catch its
+      // own broadcast and reload itself — racing the in-flight navigation to
+      // the redirect target, and sometimes winning: landing back on whatever
+      // course group was open on THIS page instead of the target page's
+      // correctly-expanded one (e.g. adding a COMP1100 session could flash
+      // COMP4020 back open if that was open here beforehand). Closing the
+      // connection the instant a form submits — synchronously, before any
+      // network round-trip — removes the race instead of just narrowing it.
       const source = new EventSource("/api/events");
+      document.addEventListener(
+        "submit",
+        () => {
+          source.close();
+        },
+        { capture: true },
+      );
+
       source.addEventListener("message", () => {
         location.reload();
       });
+
+      // Cosmetic only: the toast itself is server-rendered from the redirect
+      // query params, so it's fully functional with this script disabled —
+      // it just stays on screen instead of fading out.
+      const toast = document.querySelector(".toast");
+      if (toast) setTimeout(() => toast.remove(), 4000);
     </script>
   </body>
 </html>

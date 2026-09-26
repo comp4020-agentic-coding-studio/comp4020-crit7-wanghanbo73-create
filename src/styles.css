@@ -1,18 +1,94 @@
-body {
-  margin: 0;
-  padding: 2rem;
-  font-family: system-ui, sans-serif;
-  line-height: 1.6;
-  color: #1a1a1a;
+:root {
+  --ink: #1a1f2b;
+  --muted: #667085;
+  --border: #e3e6ec;
+  --surface: #ffffff;
+  --surface-sunk: #f6f7f9;
+  --accent: #3457d5;
+  --accent-dark: #24399b;
+  --radius: 0.75rem;
+
+  --lecture: #3457d5;
+  --lecture-bg: #eaefff;
+  --lab: #b3541e;
+  --lab-bg: #fdf0e4;
+  --studio: #1f8a5f;
+  --studio-bg: #e7f6ee;
+  --tutorial: #7b3fa0;
+  --tutorial-bg: #f4ecf9;
 }
 
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0 2rem 4rem;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  line-height: 1.6;
+  color: var(--ink);
+  background: var(--surface-sunk);
+}
+
+/* Hugs the left edge (no auto side margins) rather than centering in the
+   viewport — on a wide screen that keeps the sidebar close to the left
+   instead of drifting toward the middle. */
 main {
-  max-width: 40rem;
-  margin: 0 auto;
+  max-width: 88rem;
+  margin: 0;
+}
+
+h1,
+h2 {
+  letter-spacing: -0.01em;
+}
+
+h1 {
+  font-size: 1.9rem;
+  margin-block: 1.75rem 0.6rem;
+}
+
+h2 {
+  font-size: 1.1rem;
+  margin-block: 0 1rem;
+  color: var(--ink);
+}
+
+.lede {
+  color: var(--muted);
+  max-width: 42rem;
+  margin-block-end: 2rem;
 }
 
 a {
-  color: #0b5fff;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+nav {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  max-width: 88rem;
+  margin: 0;
+  padding-block: 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+nav .brand {
+  font-weight: 700;
+  color: var(--ink);
+  font-size: 1.05rem;
+}
+
+nav a:hover {
+  text-decoration: none;
+  color: var(--accent-dark);
 }
 
 form {
@@ -26,16 +102,349 @@ form {
 input {
   flex: 1;
   min-width: 12rem;
-  padding: 0.4rem 0.6rem;
+  padding: 0.5rem 0.7rem;
   font: inherit;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
 }
 
 button {
-  padding: 0.4rem 1rem;
+  padding: 0.45rem 1.1rem;
   font: inherit;
+  font-weight: 600;
+  border: 1px solid var(--accent);
+  border-radius: 0.4rem;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  transition: background-color 0.12s ease, transform 0.05s ease;
 }
 
-#timetable,
+button:hover {
+  background: var(--accent-dark);
+  border-color: var(--accent-dark);
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+button.button-secondary {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--border);
+}
+
+button.button-secondary:hover {
+  background: var(--surface-sunk);
+  border-color: var(--muted);
+}
+
+.panel-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-block-end: 1rem;
+}
+
+.panel-header h2 {
+  margin: 0;
+}
+
+.bulk-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.bulk-actions form {
+  margin: 0;
+}
+
+.layout {
+  display: flex;
+  gap: 2.5rem;
+  align-items: flex-start;
+}
+
+.sidebar {
+  flex: 0 0 19rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(20, 24, 40, 0.05);
+  position: sticky;
+  top: 1.5rem;
+}
+
+.timetable-panel {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(20, 24, 40, 0.05);
+}
+
 #offerings {
-  padding-inline-start: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.course-group {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.course-group summary {
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.7rem 0.9rem;
+  background: var(--surface-sunk);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.course-group summary::-webkit-details-marker {
+  display: none;
+}
+
+.course-group summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--muted);
+  transition: transform 0.15s ease;
+  font-size: 0.75rem;
+}
+
+.course-group[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.course-group summary:hover {
+  background: #eef0f4;
+}
+
+.course-sessions {
+  list-style: none;
+  margin: 0;
+  padding: 0.6rem 0.8rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.course-sessions li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.4rem;
+  border-inline-start: 3px solid var(--border);
+  background: var(--surface-sunk);
+  font-size: 0.85rem;
+}
+
+.course-sessions li.type-lecture {
+  border-inline-start-color: var(--lecture);
+}
+
+.course-sessions li.type-lab {
+  border-inline-start-color: var(--lab);
+}
+
+.course-sessions li.type-studio {
+  border-inline-start-color: var(--studio);
+}
+
+.course-sessions li.type-tutorial {
+  border-inline-start-color: var(--tutorial);
+}
+
+.session-type {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.type-lecture .session-type {
+  color: var(--lecture);
+}
+
+.type-lab .session-type {
+  color: var(--lab);
+}
+
+.type-studio .session-type {
+  color: var(--studio);
+}
+
+.type-tutorial .session-type {
+  color: var(--tutorial);
+}
+
+.session-location {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.course-sessions form {
+  margin-block: 0.3rem 0;
+}
+
+.course-sessions button {
+  padding: 0.3rem 0.8rem;
+  font-size: 0.8rem;
+}
+
+.added-tag {
+  align-self: flex-start;
+  margin-block-start: 0.3rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 1rem;
+  background: var(--studio-bg);
+  color: var(--studio);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+#timetable {
+  display: grid;
+  gap: 1px;
+  margin-block: 1rem 0;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--border);
+  font-size: 0.85rem;
+  overflow: auto;
+}
+
+.grid-corner,
+.grid-day-header,
+.grid-time-label {
+  background: var(--surface-sunk);
+  padding: 0.4rem;
+}
+
+.grid-day-header {
+  font-weight: 600;
+  text-align: center;
+  position: sticky;
+  top: 0;
+}
+
+.grid-time-label {
+  text-align: right;
+  color: var(--muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.slot {
+  position: relative;
+  background: var(--lecture-bg);
+  border-inline-start: 3px solid var(--lecture);
+  padding: 0.25rem 0.45rem;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  font-size: 0.8rem;
+  line-height: 1.25;
+}
+
+.slot.type-lab {
+  background: var(--lab-bg);
+  border-inline-start-color: var(--lab);
+}
+
+.slot.type-studio {
+  background: var(--studio-bg);
+  border-inline-start-color: var(--studio);
+}
+
+.slot.type-tutorial {
+  background: var(--tutorial-bg);
+  border-inline-start-color: var(--tutorial);
+}
+
+.remove-form {
+  position: absolute;
+  top: 0.1rem;
+  right: 0.1rem;
+  margin: 0;
+}
+
+.remove-form button {
+  min-width: 0;
+  padding: 0 0.35rem;
+  line-height: 1.4;
+  border: none;
+  border-radius: 0.25rem;
+  background: rgba(255, 255, 255, 0.75);
+  color: #9c1c12;
+  font-weight: 700;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.remove-form button:hover {
+  background: #fff;
+}
+
+.toast {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 32rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: 0.5rem;
+  border-inline-start: 4px solid;
+  box-shadow: 0 4px 16px rgba(20, 24, 40, 0.15);
+  z-index: 10;
+  animation: toast-in 0.18s ease-out;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.toast-success {
+  background: var(--studio-bg);
+  border-color: var(--studio);
+  color: #185f3f;
+}
+
+.toast-error {
+  background: #fdecea;
+  border-color: #d93025;
+  color: #9c1c12;
+}
+
+@media (max-width: 45rem) {
+  .layout {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    flex: 1 1 auto;
+    width: 100%;
+    position: static;
+  }
 }
