@@ -1,8 +1,23 @@
 ---
-import { listMessages } from "../lib/db";
+import { listOfferings, listSelections } from "../lib/db";
 import "../styles.css";
 
-const messages = listMessages();
+const offerings = listOfferings();
+const timetable = listSelections();
+
+const takenOfferingIds = new Set(timetable.map((entry) => entry.offering.id));
+
+const clashId = Number(Astro.url.searchParams.get("clash"));
+const withId = Number(Astro.url.searchParams.get("with"));
+const clashOffering = offerings.find((o) => o.id === clashId);
+const withOffering = offerings.find((o) => o.id === withId);
+
+const byDay = new Map<string, typeof timetable>();
+for (const entry of timetable) {
+  const list = byDay.get(entry.offering.day) ?? [];
+  list.push(entry);
+  byDay.set(entry.offering.day, list);
+}
 ---
 
 <!doctype html>
@@ -10,43 +25,83 @@ const messages = listMessages();
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>COMP4020 prototype</title>
+    <title>Timetable</title>
   </head>
   <body>
     <nav aria-label="site">
-      <a href="/">Guestbook</a>
+      <a href="/">Timetable</a>
       <a href="/readme/">About</a>
     </nav>
     <main>
-      <h1>Guestbook</h1>
+      <h1>My timetable</h1>
       <p>
-        A minimal full-stack starter: messages live in SQLite on the machine's
-        volume (state survives a reload and a redeploy), and new messages
-        appear in every open tab over a server-sent-events stream — open this
-        page twice and sign it in one. Replace all of this with your own
-        prototype.
+        Pick sessions from the offerings below. Adding one that overlaps a
+        session already on your timetable is rejected on the spot, instead of
+        letting you find out about the clash after enrolment.
       </p>
-      <form method="post" action="/api/messages">
-        <label for="body">Leave a message</label>
-        <input id="body" name="body" required maxlength="500" />
-        <button>Sign</button>
-      </form>
-      <ul id="messages">
-        {messages.map((message) => <li>{message.body}</li>)}
-      </ul>
+
+      {
+        clashOffering && (
+          <p role="alert">
+            {clashOffering.courseCode} {clashOffering.sessionType} (
+            {clashOffering.day} {clashOffering.startTime}–{clashOffering.endTime})
+            was not added — it clashes with{" "}
+            {withOffering
+              ? `${withOffering.courseCode} ${withOffering.sessionType} (${withOffering.day} ${withOffering.startTime}–${withOffering.endTime})`
+              : "a session already on your timetable"}
+            .
+          </p>
+        )
+      }
+
+      <section aria-labelledby="mine-heading">
+        <h2 id="mine-heading">On your timetable</h2>
+        {timetable.length === 0 && <p>Nothing added yet.</p>}
+        <ul id="timetable">
+          {[...byDay.entries()].map(([day, entries]) => (
+            <li>
+              <strong>{day}</strong>
+              <ul>
+                {entries.map((entry) => (
+                  <li data-selection-id={entry.selectionId}>
+                    {entry.offering.courseCode} {entry.offering.sessionType} ·{" "}
+                    {entry.offering.startTime}–{entry.offering.endTime} ·{" "}
+                    {entry.offering.location}
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section aria-labelledby="offerings-heading">
+        <h2 id="offerings-heading">Available sessions</h2>
+        <ul id="offerings">
+          {offerings.map((offering) => (
+            <li>
+              {offering.courseCode} {offering.sessionType} · {offering.day}{" "}
+              {offering.startTime}–{offering.endTime} · {offering.location}
+              {takenOfferingIds.has(offering.id) ? (
+                <span> (added)</span>
+              ) : (
+                <form method="post" action="/api/timetable">
+                  <input type="hidden" name="offeringId" value={offering.id} />
+                  <button>Add</button>
+                </form>
+              )}
+            </li>
+          ))}
+        </ul>
+      </section>
     </main>
     <script>
-      // The live half of the demo: subscribe to the SSE stream and prepend
-      // messages as they arrive. The form itself needs none of this — its
-      // POST + redirect re-renders the submitting tab from SQLite; this
-      // stream is how every other tab finds out.
-      const list = document.querySelector("#messages");
+      // Live half of the app: a second open tab picks up an addition made in
+      // the first over SSE. The form itself needs none of this — its
+      // POST + redirect re-renders the submitting tab from SQLite.
       const source = new EventSource("/api/events");
-      source.addEventListener("message", (event) => {
-        const message = JSON.parse(event.data);
-        const item = document.createElement("li");
-        item.textContent = message.body;
-        list?.prepend(item);
+      source.addEventListener("message", () => {
+        location.reload();
       });
     </script>
   </body>
