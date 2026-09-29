@@ -48,28 +48,35 @@ export function seedOfferingsIfEmpty(): void {
     .values([
       // id 1 — COMP4020's one lecture stream
       { courseCode: "COMP4020", sessionType: "Lecture", day: "Mon", startTime: "10:00", endTime: "11:00", location: "Kambri" },
-      // id 2, 3 — two lab time options for COMP4020; a student picks one
+      // id 2, 3, 4 — three lab time options for COMP4020; a student picks one,
+      // and picking a different one later swaps it rather than stacking
       { courseCode: "COMP4020", sessionType: "Lab", day: "Mon", startTime: "14:00", endTime: "15:30", location: "CSIT N101" },
       { courseCode: "COMP4020", sessionType: "Lab", day: "Wed", startTime: "09:00", endTime: "10:30", location: "CSIT N101" },
-      // id 4 — COMP2100's lecture; overlaps nothing, added mainly as filler
-      { courseCode: "COMP2100", sessionType: "Lecture", day: "Tue", startTime: "09:00", endTime: "10:00", location: "Manning Clark" },
-      // id 5, 6 — two lab time options for COMP2100. Option A (id 5) lands on
-      // the exact same slot as COMP4020's lab option A (id 2) — this is the
-      // reachable clash demo: two Labs from different courses overlapping.
-      { courseCode: "COMP2100", sessionType: "Lab", day: "Mon", startTime: "14:00", endTime: "15:30", location: "CSIT N103" },
-      { courseCode: "COMP2100", sessionType: "Lab", day: "Thu", startTime: "13:00", endTime: "15:00", location: "CSIT N103" },
-      // id 7 — COMP3600's lecture
-      { courseCode: "COMP3600", sessionType: "Lecture", day: "Wed", startTime: "13:00", endTime: "14:00", location: "Marie Reay" },
-      // id 8 — a lab that overlaps COMP4020's lab option B (id 3), same day,
-      // different course — a second reachable lab-vs-lab clash
-      { courseCode: "COMP3600", sessionType: "Lab", day: "Wed", startTime: "09:30", endTime: "11:00", location: "Marie Reay Lab" },
-      // id 9 — a non-lab session type; never clashes, same as Lecture
+      { courseCode: "COMP4020", sessionType: "Lab", day: "Fri", startTime: "09:00", endTime: "10:30", location: "CSIT N101" },
+      // id 5 — a non-lab session type; under the general overlap rule this
+      // clashes with anything else on the timetable at the same time too
       { courseCode: "COMP4020", sessionType: "Studio", day: "Wed", startTime: "15:30", endTime: "17:00", location: "Marie Reay 4.03" },
-      // id 10 — a second lecture stream that overlaps id 1's slot exactly,
-      // different course: proves lectures never clash even when they overlap
-      { courseCode: "COMP1100", sessionType: "Lecture", day: "Mon", startTime: "10:15", endTime: "10:45", location: "Melville Hall" },
-      // id 11 — COMP1100's normal lecture slot, clashes with nothing
-      { courseCode: "COMP1100", sessionType: "Lecture", day: "Thu", startTime: "11:00", endTime: "12:00", location: "Coombs" },
+      // id 6 — COMP2100's lecture; overlaps nothing, added mainly as filler
+      { courseCode: "COMP2100", sessionType: "Lecture", day: "Tue", startTime: "09:00", endTime: "10:00", location: "Manning Clark" },
+      // id 7, 8, 9 — three lab time options for COMP2100. Option A (id 7)
+      // lands on the exact same slot as COMP4020's lab option A (id 2) — a
+      // reachable clash demo: two Labs from different courses overlapping.
+      // Option C (id 9) overlaps COMP1100's lecture (id 13, Mon 11:00-12:00)
+      // — a reachable clash demo across session types: a Lecture and another
+      // course's Lab competing for the same hour clash just the same as two
+      // Labs would.
+      { courseCode: "COMP2100", sessionType: "Lab", day: "Mon", startTime: "14:00", endTime: "15:30", location: "CSIT N103" },
+      { courseCode: "COMP2100", sessionType: "Lab", day: "Thu", startTime: "09:00", endTime: "10:30", location: "CSIT N103" },
+      { courseCode: "COMP2100", sessionType: "Lab", day: "Mon", startTime: "11:30", endTime: "12:30", location: "CSIT N103" },
+      // id 10 — COMP3600's lecture
+      { courseCode: "COMP3600", sessionType: "Lecture", day: "Wed", startTime: "13:00", endTime: "14:00", location: "Marie Reay" },
+      // id 11, 12 — two lab time options for COMP3600. Option A (id 11)
+      // overlaps COMP4020's lab option B (id 3), same day, different course —
+      // a second reachable lab-vs-lab clash.
+      { courseCode: "COMP3600", sessionType: "Lab", day: "Wed", startTime: "09:30", endTime: "11:00", location: "Marie Reay Lab" },
+      { courseCode: "COMP3600", sessionType: "Lab", day: "Tue", startTime: "14:00", endTime: "15:30", location: "Marie Reay Lab" },
+      // id 13 — COMP1100's lecture, clashes with nothing by default
+      { courseCode: "COMP1100", sessionType: "Lecture", day: "Mon", startTime: "11:00", endTime: "12:00", location: "Coombs" },
     ])
     .run();
 }
@@ -92,23 +99,18 @@ function overlaps(aStart: string, aEnd: string, bStart: string, bEnd: string): b
   return aStart < bEnd && bStart < aEnd;
 }
 
-// The core rule this prototype exists to enforce: Lab sessions have limited,
-// timetabled slots that genuinely compete for the same room and hour, so two
-// overlapping Labs can't both be on the timetable, regardless of course.
-// Lectures (and Tutorials/Studios) are broadcast to everyone enrolled — two
-// of them overlapping isn't a real-world conflict, so they never clash, even
-// against each other. Returns the existing offering a candidate Lab would
-// clash with, or null if it's clear or the candidate isn't a Lab at all.
-// `ignoreOfferingId` skips one existing selection from clash consideration —
-// used by addSelection when a course's existing Lab is about to be replaced
-// by another Lab option for the same course, so the outgoing one shouldn't
-// count as a clash against the incoming one.
+// The core rule this prototype exists to enforce: you can't be in two places
+// at once, so any two sessions that overlap in time on the same day clash —
+// regardless of session type or course. A Lecture landing on top of another
+// course's Lab is just as much a real conflict as two Labs overlapping.
+// Returns the existing offering a candidate would clash with, or null if
+// it's clear. `ignoreOfferingId` skips one existing selection from clash
+// consideration — used by addSelection when a course's existing Lab is
+// about to be replaced by another Lab option for the same course, so the
+// outgoing one shouldn't count as a clash against the incoming one.
 export function findClash(candidate: Offering, ignoreOfferingId?: number): Offering | null {
-  if (candidate.sessionType !== "Lab") return null;
-
   const existing = listSelections();
   for (const entry of existing) {
-    if (entry.offering.sessionType !== "Lab") continue;
     if (entry.offering.day !== candidate.day) continue;
     if (entry.offering.id === candidate.id) continue;
     if (entry.offering.id === ignoreOfferingId) continue;
@@ -185,19 +187,19 @@ export interface AutoSelectResult {
 }
 
 // One-click enrol: rebuild the timetable from scratch so the result is
-// reproducible rather than layered on whatever was already selected. Every
-// non-Lab session is added unconditionally (Lectures/Tutorials/Studios never
-// clash, so there's nothing to choose between); for Labs, only one is
-// required per course, so options are tried in day/time order and the first
-// one that doesn't clash with a Lab already placed for an earlier course
-// wins. This is greedy, not an exhaustive search over every combination —
-// good enough for a catalogue this size, where it happens to resolve
-// cleanly, but a pathological catalogue could have a workable assignment
-// that a different pick order would have found and this one misses. A
-// course whose every Lab option clashes lands in `conflicts`: its Lecture
-// (and any other non-Lab sessions) are still on the timetable, just without
-// a Lab, and the caller is expected to tell the student to swap that course
-// out rather than to keep searching for a Lab that isn't actually free.
+// reproducible rather than layered on whatever was already selected.
+// Non-Lab sessions (Lectures/Tutorials/Studios) are compulsory and have no
+// alternative to fall back on, so each is just attempted once — under the
+// general overlap rule that attempt can now fail too, and a course whose
+// Lecture (or other non-Lab session) clashes with something already placed
+// lands in `conflicts` the same as a course whose every Lab option clashes.
+// For Labs, only one is required per course, so options are tried in
+// day/time order and the first one that doesn't clash with anything already
+// placed for an earlier course wins. This is greedy, not an exhaustive
+// search over every combination — good enough for a catalogue this size,
+// where it happens to resolve cleanly, but a pathological catalogue could
+// have a workable assignment that a different pick order would have found
+// and this one misses.
 export function autoSelectAll(): AutoSelectResult {
   clearSelections();
 
@@ -212,21 +214,26 @@ export function autoSelectAll(): AutoSelectResult {
   const conflicts: string[] = [];
 
   for (const [courseCode, sessions] of byCourse) {
+    let courseHasConflict = false;
+
     for (const offering of sessions) {
       if (offering.sessionType === "Lab") continue;
       const result = addSelection(offering.id);
       if (result.ok) added.push(result.entry);
+      else courseHasConflict = true;
     }
 
     const labs = sessions.filter((offering) => offering.sessionType === "Lab");
-    if (labs.length === 0) continue;
+    if (labs.length > 0) {
+      const placed = labs.some((offering) => {
+        const result = addSelection(offering.id);
+        if (result.ok) added.push(result.entry);
+        return result.ok;
+      });
+      if (!placed) courseHasConflict = true;
+    }
 
-    const placed = labs.some((offering) => {
-      const result = addSelection(offering.id);
-      if (result.ok) added.push(result.entry);
-      return result.ok;
-    });
-    if (!placed) conflicts.push(courseCode);
+    if (courseHasConflict) conflicts.push(courseCode);
   }
 
   return { added, conflicts };

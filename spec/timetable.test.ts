@@ -2,15 +2,13 @@ import { describe, expect, inject, it } from "vitest";
 
 // Drives the running app over HTTP to prove the two contracts crit 7's
 // spec names: the core flow (adding a session) persists across a reload,
-// and a clash between two overlapping LAB sessions is caught, while
-// overlapping Lectures (or any other non-Lab session type) never clash —
-// lectures are broadcast to everyone enrolled, so two of them overlapping
-// isn't a real scheduling conflict, only two Labs competing for the same
-// room and hour is. The seed catalogue is deterministic (see
-// seedOfferingsIfEmpty in src/lib/db.ts): offering 1 (COMP4020 Lecture, Mon
-// 10:00-11:00) and offering 10 (COMP1100 Lecture, Mon 10:15-10:45) overlap
-// but are both Lectures, while offering 2 (COMP4020 Lab, Mon 14:00-15:30)
-// and offering 5 (COMP2100 Lab, Mon 14:00-15:30) overlap and are both Labs.
+// and a clash between any two sessions that overlap in time on the same day
+// is caught — regardless of session type or course. The seed catalogue is
+// deterministic (see seedOfferingsIfEmpty in src/lib/db.ts): offering 13
+// (COMP1100 Lecture, Mon 11:00-12:00) and offering 9 (COMP2100 Lab, Mon
+// 11:30-12:30) overlap despite being different session types from different
+// courses, while offering 2 (COMP4020 Lab, Mon 14:00-15:30) and offering 7
+// (COMP2100 Lab, Mon 14:00-15:30) overlap and are both Labs.
 // Tests run in order within this file and share one server.
 const baseUrl = inject("baseUrl");
 
@@ -48,47 +46,43 @@ const clearAll = () =>
 
 describe("timetable", () => {
   it("accepts a session and it persists across a reload", async () => {
-    // offering 11: COMP1100 Lecture, Thu 11:00-12:00 — clashes with nothing
-    const res = await post(11);
+    // offering 13: COMP1100 Lecture, Mon 11:00-12:00 — clashes with nothing yet
+    const res = await post(13);
     expect(res.status).toBe(303);
-    expect(res.headers.get("location")).toBe("/?added=11");
+    expect(res.headers.get("location")).toBe("/?added=13");
 
     const page = await fetch(baseUrl);
     const html = await page.text();
     expect(html).toContain("COMP1100");
-    expect(html).toContain("Thu");
+    expect(html).toContain("Mon");
   });
 
-  it("never clashes two overlapping Lectures, but rejects two overlapping Labs from different courses", async () => {
-    // offering 1 (COMP4020 Lecture, Mon 10:00-11:00), then offering 10
-    // (COMP1100 Lecture, Mon 10:15-10:45) which overlaps it in time — both
-    // are Lectures, so both succeed; lectures never clash.
-    const lecture1 = await post(1);
-    expect(lecture1.status).toBe(303);
-    expect(lecture1.headers.get("location")).toBe("/?added=1");
-
-    const lecture2 = await post(10);
-    expect(lecture2.status).toBe(303);
-    expect(lecture2.headers.get("location")).toBe("/?added=10");
+  it("rejects an overlapping session regardless of session type, but allows non-overlapping ones", async () => {
+    // offering 9 (COMP2100 Lab, Mon 11:30-12:30) overlaps offering 13
+    // (COMP1100 Lecture, Mon 11:00-12:00), already on the timetable from the
+    // previous test — a Lecture and a different course's Lab, proving the
+    // clash rule is no longer Lab-only.
+    const crossType = await post(9);
+    expect(crossType.status).toBe(303);
+    expect(crossType.headers.get("location")).toBe("/?clash=9&with=13");
 
     // offering 2 (COMP4020 Lab, Mon 14:00-15:30) — a clean add
     const lab1 = await post(2);
     expect(lab1.status).toBe(303);
     expect(lab1.headers.get("location")).toBe("/?added=2");
 
-    // offering 5 (COMP2100 Lab, Mon 14:00-15:30) overlaps offering 2 exactly
-    // and is also a Lab — this is the clash the app must still catch.
-    const clashing = await post(5);
+    // offering 7 (COMP2100 Lab, Mon 14:00-15:30) overlaps offering 2 exactly
+    // and is also a Lab — the classic clash the app must still catch.
+    const clashing = await post(7);
     expect(clashing.status).toBe(303);
-    expect(clashing.headers.get("location")).toBe("/?clash=5&with=2");
+    expect(clashing.headers.get("location")).toBe("/?clash=7&with=2");
 
     const page = await fetch(baseUrl);
     const html = await page.text();
     const timetableSection = html.match(/<div id="timetable"[\s\S]*?<\/section>/)?.[0] ?? "";
-    expect(timetableSection).toContain("COMP4020 Lecture");
     expect(timetableSection).toContain("COMP1100 Lecture");
     expect(timetableSection).toContain("COMP4020 Lab");
-    // the clashing COMP2100 lab was never added to the timetable
+    // both the cross-type and the lab-vs-lab clash were rejected
     expect(timetableSection).not.toContain("COMP2100 Lab");
   });
 
@@ -99,8 +93,8 @@ describe("timetable", () => {
     const reader = stream.body?.getReader();
     if (!reader) throw new Error("no response body");
 
-    // offering 6: COMP2100 Lab, Thu 13:00-15:00 — clashes with nothing added so far
-    await post(6);
+    // offering 8: COMP2100 Lab, Thu 13:00-15:00 — clashes with nothing added so far
+    await post(8);
 
     const decoder = new TextDecoder();
     let received = "";
@@ -114,10 +108,10 @@ describe("timetable", () => {
   }, 10_000);
 
   it("removes a session from the timetable", async () => {
-    // offering 7: COMP3600 Lecture, Wed 13:00-14:00 — clashes with nothing added so far
-    const added = await post(7);
+    // offering 10: COMP3600 Lecture, Wed 13:00-14:00 — clashes with nothing added so far
+    const added = await post(10);
     expect(added.status).toBe(303);
-    expect(added.headers.get("location")).toBe("/?added=7");
+    expect(added.headers.get("location")).toBe("/?added=10");
 
     const beforeHtml = await (await fetch(baseUrl)).text();
     const slots = beforeHtml.match(/<div class="slot[^"]*"[\s\S]*?<\/div>/g) ?? [];
@@ -128,7 +122,7 @@ describe("timetable", () => {
 
     const removed = await remove(selectionId);
     expect(removed.status).toBe(303);
-    expect(removed.headers.get("location")).toBe("/?removed=7");
+    expect(removed.headers.get("location")).toBe("/?removed=10");
 
     const afterHtml = await (await fetch(baseUrl)).text();
     const timetableSection = afterHtml.match(/<div id="timetable"[\s\S]*?<\/section>/)?.[0] ?? "";
@@ -144,10 +138,10 @@ describe("timetable", () => {
     const labSlotsBefore = (beforeSection.match(/<div class="slot type-lab"/g) ?? []).length;
 
     // offering 3: COMP4020 Lab, Wed 09:00-10:30 — a different time option for
-    // the same course, doesn't overlap offering 2 at all, so the old
-    // same-course same-day clash rule would have let both sit on the
-    // timetable together. A course only needs one Lab, so this should swap
-    // offering 2 out instead of adding a second Lab slot.
+    // the same course, doesn't overlap offering 2 at all, so a plain overlap
+    // rule would have let both sit on the timetable together. A course only
+    // needs one Lab, so this should swap offering 2 out instead of adding a
+    // second Lab slot.
     const res = await post(3);
     expect(res.status).toBe(303);
     expect(res.headers.get("location")).toBe("/?added=3");
@@ -161,11 +155,11 @@ describe("timetable", () => {
     expect(afterSection).not.toContain("14:00–15:30");
   });
 
-  it("one-click enrol fills every course's Lecture and a non-clashing Lab, and clear empties the timetable", async () => {
-    // The seed catalogue's Lab clashes (2×5, 3×8) are resolvable by picking
-    // each course's Lab options in a different order, so a correct greedy
-    // pass hits zero conflicts here — see autoSelectAll's doc comment in
-    // src/lib/db.ts for why that's not a general guarantee.
+  it("one-click enrol fills every course's compulsory sessions and a non-clashing Lab, and clear empties the timetable", async () => {
+    // The seed catalogue's clashes (2x7, 3x11, 9x13) are all resolvable by
+    // picking each course's Lab options in a different order, so a correct
+    // greedy pass hits zero conflicts here — see autoSelectAll's doc comment
+    // in src/lib/db.ts for why that's not a general guarantee.
     const res = await autoselect();
     expect(res.status).toBe(303);
     expect(res.headers.get("location")).toBe("/?autoselected=1");
@@ -183,7 +177,7 @@ describe("timetable", () => {
     expect(timetableSection).toContain("COMP3600 Lab");
     expect(timetableSection).toContain("COMP1100 Lecture");
     const slots = timetableSection.match(/<div class="slot[^"]*"/g) ?? [];
-    expect(slots.length).toBe(9); // 3 (COMP4020) + 2 + 2 + 2
+    expect(slots.length).toBe(8); // 3 (COMP4020) + 2 + 2 + 1 (COMP1100 has no Lab)
 
     const cleared = await clearAll();
     expect(cleared.status).toBe(303);
